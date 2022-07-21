@@ -570,16 +570,8 @@ sumologic:
     provider: otelcol
 ```
 
-Currently the OT configuration directly uses the following Fluentd configuration values:
-
-- `fluentd.events.sourceCategory` to specify the [source category][source_category] for the event logs
-- `fluentd.events.sourceName` to specify the [source name][source_name] for the event logs
-
 For configurations that don't modify `sumologic.fluentd.events.overrideOutputConf`, this should be enough. See the configuration
-options under `otelevents` in [values.yaml](../helm/sumologic/values.yaml).
-
-[source_category]: https://help.sumologic.com/03Send-Data/Sources/04Reference-Information-for-Sources/Metadata-Naming-Conventions#Source_Categories
-[source_name]: https://help.sumologic.com/03Send-Data/Sources/04Reference-Information-for-Sources/Metadata-Naming-Conventions#Source_Name
+options under `otelevents` in [values.yaml](../helm/sumologic/values.yaml) for OT-specific configuration.
 
 ### Customizing OpenTelemetry Collector configuration
 

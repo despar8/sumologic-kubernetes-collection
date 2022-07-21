@@ -1445,9 +1445,6 @@ Example Usage:
 {{- $enabled = false -}}
 {{- end -}}
 {{- end -}}
-{{- if eq .Values.fluentd.events.enabled false -}}
-{{- $enabled = false -}}
-{{- end -}}
 {{ $enabled }}
 {{- end -}}
 
