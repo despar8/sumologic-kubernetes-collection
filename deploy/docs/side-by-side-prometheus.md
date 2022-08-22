@@ -41,7 +41,7 @@ The following are required to setup Sumo Logic's Kubernetes collection.
 - An [Access ID and Access Key](https://help.sumologic.com/Manage/Security/Access-Keys) with [Manage Collectors](https://help.sumologic.com/Manage/Users-and-Roles/Manage-Roles/05-Role-Capabilities#data-management) capability.
 - Please review our [minimum requirements](../README.md#minimum-requirements) and [support matrix](../README.md#support-matrix)
 
-To get an idea of the resources this chart will require to run on your cluster, you can reference our [performance doc](./Performance.md).
+To get an idea of the resources this chart will require to run on your cluster, you can reference our [performance doc](performance.md).
 
 ### Prerequisite
 
@@ -67,7 +67,7 @@ The following parameter is optional, but we recommend setting it.
 
 - **sumologic.clusterName** - An identifier for your Kubernetes cluster. This is the name you will see for the cluster in Sumo Logic. Default is `kubernetes`.
 
-If you are installing the collection in a cluster that requires proxying outbound requests, please see the following [additional properties](./Installing_Behind_Proxy.md) you will need to set.
+If you are installing the collection in a cluster that requires proxying outbound requests, please see the following [additional properties](installing-behind-proxy.md) you will need to set.
 
 If you are installing with an existing Prometheus Operator you must also define the following values:
 
@@ -221,7 +221,7 @@ Once you have completed installation, you can
 [install the Kubernetes App and view the dashboards][sumo-k8s-app-dashboards]
 or [open a new Explore tab] in Sumo Logic.
 If you do not see data in Sumo Logic, you can review our
-[troubleshooting guide](./Troubleshoot_Collection.md).
+[troubleshooting guide](troubleshoot-collection.md).
 
 [sumo-k8s-app-dashboards]: https://help.sumologic.com/07Sumo-Logic-Apps/10Containers_and_Orchestration/Kubernetes/Install_the_Kubernetes_App_and_view_the_Dashboards
 [open a new Explore tab]: https://help.sumologic.com/Observability_Solution/Kubernetes_Solution/02Monitoring_Using_Kubernetes#open%C2%A0explore
@@ -266,7 +266,7 @@ The installation process creates new [HTTP endpoints](https://help.sumologic.com
 in your Sumo Logic account, that are used to send data to Sumo.
 This error occurs if the endpoints had already been created by an earlier run of the installation process.
 
-You can find more information in our [troubleshooting documentation](Troubleshoot_Collection.md).
+You can find more information in our [troubleshooting documentation](troubleshoot-collection.md).
 
 ### Customizing Installation
 
@@ -282,11 +282,11 @@ in the `values.yaml` as well or pass them in via `--set`
 helm upgrade --install my-release sumologic/sumologic -f values.yaml
 ```
 
-> **Tip**: To filter or add custom metrics to Prometheus, [please refer to this document](additional_prometheus_configuration.md)
+> **Tip**: To filter or add custom metrics to Prometheus, [please refer to this document](additional-prometheus-configuration.md)
 
 ### Upgrading Sumo Logic Collection
 
-**Note, if you are upgrading to version 1.x of our collection from a version before 1.x, please see our [migration guide](v1_migration_doc.md).**
+**Note, if you are upgrading to version 1.x of our collection from a version before 1.x, please see our [migration guide](v1-migration-doc.md).**
 
 To upgrade our helm chart to a newer version, you must first run update your local helm repo.
 
