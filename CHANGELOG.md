@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking Changes
 
 - fix(logs): prevent Fluent Bit from doing metadata enrichment [#2512]
+- feat(metrics)!: disable Thanos by default [#2514]
 
 ### Added
 
@@ -23,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#2502]: https://github.com/SumoLogic/sumologic-kubernetes-collection/pull/2502
 [#2506]: https://github.com/SumoLogic/sumologic-kubernetes-collection/pull/2506
 [#2512]: https://github.com/SumoLogic/sumologic-kubernetes-collection/pull/2512
+[#2514]: https://github.com/SumoLogic/sumologic-kubernetes-collection/pull/2514
 [Unreleased]: https://github.com/SumoLogic/sumologic-kubernetes-collection/compare/v2.15.0...main
 
 ## [v2.15.0]
