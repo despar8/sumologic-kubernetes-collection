@@ -2,7 +2,9 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: sumologic-configmap
+  labels:
+    {{- include "sumologic.labels.common" . | nindent 4 }}
 data:
-  fluentdLogs: {{ template "sumologic.metadata.name.logs.service" . }}
-  fluentdMetrics: {{ template "sumologic.metrics.metadata.endpoint" . }}
-  fluentdNamespace: {{ .Release.Namespace }}
+  metadataLogs: {{ template "sumologic.metadata.name.logs.service" . }}
+  metadataMetrics: {{ template "sumologic.metrics.metadata.endpoint" . }}
+  metadataNamespace: {{ .Release.Namespace }}

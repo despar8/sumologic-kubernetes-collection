@@ -3,6 +3,7 @@ package stepfuncs
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -171,11 +172,15 @@ func WaitUntilExpectedMetricsPresent(
 				if err != nil {
 					return "", err
 				}
+				missingMetrics := []string{}
 				for _, expectedMetricName := range expectedMetrics {
 					_, ok := metricCounts[expectedMetricName]
 					if !ok {
-						return "", fmt.Errorf("couldn't find metric %q in received metrics", expectedMetricName)
+						missingMetrics = append(missingMetrics, expectedMetricName)
 					}
+				}
+				if len(missingMetrics) > 0 {
+					return "", fmt.Errorf("couldn't find the following metrics in received metrics: %v", missingMetrics)
 				}
 				return fmt.Sprintf("All expected metrics were received: %v", expectedMetrics), nil
 			},
@@ -332,6 +337,80 @@ func WaitUntilDaemonSetIsReady(
 				wait.WithInterval(tickDuration),
 			),
 		)
+
+		return ctx
+	}
+}
+
+// WaitUntilDeploymentIsReady waits for a specified duration and checks with the
+// specified tick interval whether the deployment (as described by the provided options)
+// is ready.
+//
+// Readiness for a deployment is defined as having Status.NumberUnavailable == 0.
+func WaitUntilDeploymentIsReady(
+	waitDuration time.Duration,
+	tickDuration time.Duration,
+	opts ...Option,
+) features.Func {
+	return func(ctx context.Context, t *testing.T, envConf *envconf.Config) context.Context {
+		deps := appsv1.Deployment{
+			ObjectMeta: v1.ObjectMeta{
+				Namespace: ctxopts.Namespace(ctx),
+			},
+		}
+
+		listOpts := []resources.ListOption{}
+		for _, opt := range opts {
+			opt.Apply(ctx, &deps)
+			listOpts = append(listOpts, opt.GetListOption(ctx))
+		}
+
+		res := envConf.Client().Resources(ctxopts.Namespace(ctx))
+		cond := conditions.
+			New(res).
+			ResourceListMatchN(&appsv1.DeploymentList{Items: []appsv1.Deployment{deps}},
+				1,
+				func(obj k8s.Object) bool {
+					dep := obj.(*appsv1.Deployment)
+					log.V(5).InfoS("Deployment", "status", dep.Status)
+					if dep.Status.UnavailableReplicas != 0 {
+						log.V(0).Infof("Deployment %q not yet fully ready", dep.Name)
+						return false
+					}
+					return true
+				},
+				listOpts...,
+			)
+
+		require.NoError(t,
+			wait.For(cond,
+				wait.WithTimeout(waitDuration),
+				wait.WithInterval(tickDuration),
+			),
+		)
+
+		return ctx
+	}
+}
+
+func WaitForPvcCount(appName string, count int, waitDuration time.Duration, tickDuration time.Duration) features.Func {
+	return func(ctx context.Context, t *testing.T, c *envconf.Config) context.Context {
+		kubectlOptions := ctxopts.KubectlOptions(ctx)
+
+		assert.Eventually(t, func() bool {
+			output, err := terrak8s.RunKubectlAndGetOutputE(t, kubectlOptions, "get", "pvc", "--selector", fmt.Sprintf("app=%s-%s", ctxopts.HelmRelease(ctx), appName))
+
+			require.NoError(t, err)
+
+			lines := strings.Split(output, "\n")
+			if len(lines) > 0 && strings.HasPrefix(lines[0], "NAME") {
+				// Fetched string has also the initial line with column names
+				return len(lines)-1 == count
+			} else {
+				return false
+			}
+
+		}, waitDuration, tickDuration)
 
 		return ctx
 	}

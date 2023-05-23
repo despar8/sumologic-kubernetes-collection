@@ -5,6 +5,7 @@ metadata:
   name: {{ template "sumologic.metadata.name.logs.service-headless" . }}
   labels:
     app: {{ template "sumologic.labels.app.logs.service-headless" . }}
+    {{- include "sumologic.labels.common" . | nindent 4 }}
     {{- include "sumologic.labels.logs" . | nindent 4 }}
 {{- if .Values.metadata.serviceLabels }}
 {{ toYaml .Values.metadata.serviceLabels | indent 4 }}
@@ -18,12 +19,6 @@ spec:
     port: 4318
     targetPort: 4318
     protocol: TCP
-  {{- if .Values.sumologic.traces.enabled }}
-  - name: zipkin-write
-    port: 9411
-    targetPort: 9411
-    protocol: TCP
-  {{- end }}
   - name: fluent-bit
     port: 24321
     targetPort: 24321

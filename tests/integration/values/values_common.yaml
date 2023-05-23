@@ -17,6 +17,7 @@ sumologic:
         requests:
           cpu: 5m
           memory: 16Mi
+      replicaCount: 1
 
 # Request less resources so that this fits on Github actions runners environment
 kube-prometheus-stack:
@@ -33,6 +34,18 @@ kube-prometheus-stack:
     service:
       targetPort: 2381
 
+  # starting with K8s 1.23, the scheduler uses a secure port for metrics
+  # kube-prometheus-stack sets the default port based on the version
+  # however, kind uses kubeadm, which uses the secure port for 1.21 and 1.22 as well
+  # TODO: delete this after we drop support for 1.22
+  kubeScheduler:
+    service:
+      port: 10259
+      targetPort: 10259
+    serviceMonitor:
+      https: true
+      insecureSkipVerify: true
+
 # Request less resources so that this fits on Github actions runners environment
 metadata:
   persistence:
@@ -44,12 +57,14 @@ metadata:
         requests:
           cpu: 100m
           memory: 128Mi
+      replicaCount: 1
   metrics:
     statefulset:
       resources:
         requests:
           cpu: 100m
           memory: 128Mi
+      replicaCount: 1
 
 # Request less resources so that this fits on Github actions runners environment
 fluentd:
@@ -74,20 +89,174 @@ fluentd:
   persistence:
     size: 100Mi
 
-# Request less resources so that this fits on Github actions runners environment
-otelcol:
-  deployment:
-    replicas: 1
+otelevents:
+  config:
+    merge:
+      receivers:
+        raw_k8s_events:
+          # we want to get all historical events for this test
+          max_event_age: 1h
+  statefulset:
     resources:
       requests:
         memory: 64Mi
         cpu: 100m
 
+otelcol:
+  logs:
+    statefulset:
+      replicaCount: 1
+  metrics:
+    statefulset:
+      replicaCount: 1
+
 # Request less resources so that this fits on Github actions runners environment
-otelagent:
-  enabled: true
-  daemonset:
+tracesSampler:
+  config:
+    # Default otlp pipeline from values.yaml is used.
+    exporters:
+      otlphttp:
+        traces_endpoint: http://receiver-mock.receiver-mock:3000/receiver/v1/traces
+  deployment:
+    replicas: 1
     resources:
       requests:
         memory: 64Mi
-        cpu: 50m
+        cpu: 10m
+
+# Request less resources so that this fits on Github actions runners environment
+tracesGateway:
+  deployment:
+    replicas: 1
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 10m
+
+# Request less resources so that this fits on Github actions runners environment
+otelcolInstrumentation:
+  enabled: true
+  statefulset:
+    replicaCount: 1
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 10m
+
+# We're using otelcol instead
+fluent-bit:
+  enabled: false
+
+  config:
+    # use the containerd parser, we have docker-shim by default
+    inputs: |
+      [INPUT]
+          Name                tail
+          Path                /var/log/containers/*.log
+          Parser              containerd
+          Tag                 containers.*
+          Refresh_Interval    1
+          Rotate_Wait         60
+          Mem_Buf_Limit       5MB
+          Skip_Long_Lines     On
+          DB                  /tail-db/tail-containers-pods-state-sumo.db
+          DB.Sync             Normal
+      [INPUT]
+          Name            systemd
+          Tag             host.*
+          DB              /tail-db/systemd-state-sumo.db
+          Systemd_Filter  _SYSTEMD_UNIT=addon-config.service
+          Systemd_Filter  _SYSTEMD_UNIT=addon-run.service
+          Systemd_Filter  _SYSTEMD_UNIT=cfn-etcd-environment.service
+          Systemd_Filter  _SYSTEMD_UNIT=cfn-signal.service
+          Systemd_Filter  _SYSTEMD_UNIT=clean-ca-certificates.service
+          Systemd_Filter  _SYSTEMD_UNIT=containerd.service
+          Systemd_Filter  _SYSTEMD_UNIT=coreos-metadata.service
+          Systemd_Filter  _SYSTEMD_UNIT=coreos-setup-environment.service
+          Systemd_Filter  _SYSTEMD_UNIT=coreos-tmpfiles.service
+          Systemd_Filter  _SYSTEMD_UNIT=dbus.service
+          Systemd_Filter  _SYSTEMD_UNIT=docker.service
+          Systemd_Filter  _SYSTEMD_UNIT=efs.service
+          Systemd_Filter  _SYSTEMD_UNIT=etcd-member.service
+          Systemd_Filter  _SYSTEMD_UNIT=etcd.service
+          Systemd_Filter  _SYSTEMD_UNIT=etcd2.service
+          Systemd_Filter  _SYSTEMD_UNIT=etcd3.service
+          Systemd_Filter  _SYSTEMD_UNIT=etcdadm-check.service
+          Systemd_Filter  _SYSTEMD_UNIT=etcdadm-reconfigure.service
+          Systemd_Filter  _SYSTEMD_UNIT=etcdadm-save.service
+          Systemd_Filter  _SYSTEMD_UNIT=etcdadm-update-status.service
+          Systemd_Filter  _SYSTEMD_UNIT=flanneld.service
+          Systemd_Filter  _SYSTEMD_UNIT=format-etcd2-volume.service
+          Systemd_Filter  _SYSTEMD_UNIT=kube-node-taint-and-uncordon.service
+          Systemd_Filter  _SYSTEMD_UNIT=kubelet.service
+          Systemd_Filter  _SYSTEMD_UNIT=snap.microk8s.daemon-kubelite.service
+          Systemd_Filter  _SYSTEMD_UNIT=ldconfig.service
+          Systemd_Filter  _SYSTEMD_UNIT=locksmithd.service
+          Systemd_Filter  _SYSTEMD_UNIT=logrotate.service
+          Systemd_Filter  _SYSTEMD_UNIT=lvm2-monitor.service
+          Systemd_Filter  _SYSTEMD_UNIT=mdmon.service
+          Systemd_Filter  _SYSTEMD_UNIT=nfs-idmapd.service
+          Systemd_Filter  _SYSTEMD_UNIT=nfs-mountd.service
+          Systemd_Filter  _SYSTEMD_UNIT=nfs-server.service
+          Systemd_Filter  _SYSTEMD_UNIT=nfs-utils.service
+          Systemd_Filter  _SYSTEMD_UNIT=node-problem-detector.service
+          Systemd_Filter  _SYSTEMD_UNIT=ntp.service
+          Systemd_Filter  _SYSTEMD_UNIT=oem-cloudinit.service
+          Systemd_Filter  _SYSTEMD_UNIT=rkt-gc.service
+          Systemd_Filter  _SYSTEMD_UNIT=rkt-metadata.service
+          Systemd_Filter  _SYSTEMD_UNIT=rpc-idmapd.service
+          Systemd_Filter  _SYSTEMD_UNIT=rpc-mountd.service
+          Systemd_Filter  _SYSTEMD_UNIT=rpc-statd.service
+          Systemd_Filter  _SYSTEMD_UNIT=rpcbind.service
+          Systemd_Filter  _SYSTEMD_UNIT=set-aws-environment.service
+          Systemd_Filter  _SYSTEMD_UNIT=system-cloudinit.service
+          Systemd_Filter  _SYSTEMD_UNIT=systemd-timesyncd.service
+          Systemd_Filter  _SYSTEMD_UNIT=update-ca-certificates.service
+          Systemd_Filter  _SYSTEMD_UNIT=user-cloudinit.service
+          Systemd_Filter  _SYSTEMD_UNIT=var-lib-etcd2.service
+          Max_Entries     1000
+          Read_From_Tail  true
+    # Prevent snowball effect by filtering out receiver mock logs
+    filters: |
+      [FILTER]
+          Name    grep
+          Match   containers.var.log.containers.receiver-mock*
+          Exclude logtag .*
+  extraVolumeMounts:
+    - mountPath: /tail-db
+      name: tail-db
+    - mountPath: /run/log/journal
+      name: run-log-journal
+  extraVolumes:
+    - hostPath:
+        path: /var/lib/fluent-bit
+        type: DirectoryOrCreate
+      name: tail-db
+    # kind doesn't enable journald persistence, and the journal resides at /run/log/journal
+    # instead of /var/log/journal
+    - hostPath:
+        path: /run/log/journal
+        type: DirectoryOrCreate
+      name: run-log-journal
+
+otellogs:
+  config:
+    merge:
+      receivers:
+        journald:
+          directory: /run/log/journal
+        # Prevent snowball effect by filtering out receiver mock logs
+        filelog/containers:
+          exclude:
+            - /var/log/pods/receiver-mock_*/*/*.log
+  daemonset:
+    extraVolumeMounts:
+      - mountPath: /run/log/journal
+        name: run-log-journal
+    extraVolumes:
+      # kind doesn't enable journald persistence, and the journal resides at /run/log/journal
+      # instead of /var/log/journal
+      - hostPath:
+          path: /run/log/journal
+          type: DirectoryOrCreate
+        name: run-log-journal

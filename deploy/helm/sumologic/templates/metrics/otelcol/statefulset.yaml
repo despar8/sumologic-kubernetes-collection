@@ -1,4 +1,4 @@
-{{- if eq (include "metrics.otelcol.enabled" .) "true" }}
+{{ if and (eq (include "metrics.otelcol.enabled" .) "true") (not .Values.sumologic.metrics.collector.otelcol.enabled) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -97,6 +97,8 @@ spec:
       - name: config-volume
         configMap:
           name: {{ template "sumologic.metadata.name.metrics.configmap" . }}
+      - name: tmp
+        emptyDir: {}
 {{- if .Values.metadata.metrics.statefulset.extraVolumes }}
 {{ toYaml .Values.metadata.metrics.statefulset.extraVolumes | indent 6 }}
 {{- end }}
@@ -107,13 +109,10 @@ spec:
       {{- end }}
       containers:
       - name: otelcol
-        image: {{ .Values.metadata.image.repository }}:{{ .Values.metadata.image.tag }}
+        image: {{ template "sumologic.metadata.image" . }}
         imagePullPolicy: {{ .Values.metadata.image.pullPolicy }}
         args:
           - --config=/etc/otel/config.yaml
-          {{- if eq .Values.otelcol.metrics.enabled false }}
-          - --metrics-level=none
-          {{- end }}
         resources:
           {{- toYaml .Values.metadata.metrics.statefulset.resources | nindent 10 }}
         {{- if .Values.metadata.metrics.statefulset.containers.otelcol.securityContext }}
@@ -124,14 +123,12 @@ spec:
         - name: prom-write
           containerPort: 9888
           protocol: TCP
-        {{- if eq .Values.otelcol.metrics.enabled true }}
         - name: metrics
           containerPort: 8888
           protocol: TCP
         - name: pprof
           containerPort: 1777
           protocol: TCP
-        {{- end }}
         livenessProbe:
           httpGet:
             path: /
@@ -151,6 +148,8 @@ spec:
         - name: config-volume
           mountPath: /etc/otel/config.yaml
           subPath: config.yaml
+        - name: tmp
+          mountPath: /tmp
 {{- if .Values.metadata.persistence.enabled }}
         - name: file-storage
           mountPath: /var/lib/storage/otc
@@ -160,7 +159,8 @@ spec:
 {{- end }}
         env:
 {{- $ctx := .Values -}}
-{{- include "kubernetes.sources.envs" (dict "Context" $ctx "Type" "metrics") -}}
+{{- include "kubernetes.sources.envs" (dict "Context" $ctx "Type" "metrics") | nindent 8 -}}
+{{- include "proxy-env-variables" . | nindent 8 -}}
         {{- if .Values.metadata.metrics.statefulset.extraEnvVars }}
 {{ toYaml .Values.metadata.metrics.statefulset.extraEnvVars | nindent 8 }}
         {{- end }}

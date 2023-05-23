@@ -1,2 +1,0 @@
-fluentd:
-  apiServerUrl: "https://kubernetes.default.svc:443"

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
 GREP="grep"
-if [[ "$(uname -s)" == "Darwin" ]]; then
+OS="$(uname -s)"
+if [[ "${OS}" == "Darwin" ]]; then
     GREP="ggrep"
 fi
 
@@ -21,7 +24,7 @@ for file in ${FILES}; do
     # filter out all links pointing to specific release, tag or commit
     # filter out links ended with /releases
     if "${GREP}" -HnoP '\[[^\]]*\]\([^\)]*\)' "${file}" \
-        | "${GREP}" 'github.com/sumologic-kubernetes-collection' \
+        | "${GREP}" 'github.com/sumologic/sumologic-kubernetes-collection' \
         | "${GREP}" -vP '(\/(blob|tree)\/(v\d+\.|[a-f0-9]{40}\/|release\-))' \
         | "${GREP}" -vP '\/releases\)'; then
     

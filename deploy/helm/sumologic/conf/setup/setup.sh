@@ -11,7 +11,8 @@ if [[ ${DEBUG_MODE,,} == "${DEBUG_MODE_ENABLED_FLAG}" ]]; then
 
     while true; do
         sleep 10
-        echo "$(date) Sleeping in the debug mode..."
+        DATE=$(date)
+        echo "${DATE} Sleeping in the debug mode..."
     done
 fi
 
@@ -23,6 +24,7 @@ function fix_sumo_base_url() {
     BASE_URL="https://api.sumologic.com/api/"
   fi
 
+  # shellcheck disable=SC2312
   OPTIONAL_REDIRECTION="$(curl -XGET -s -o /dev/null -D - \
           -u "${SUMOLOGIC_ACCESSID}:${SUMOLOGIC_ACCESSKEY}" \
           "${BASE_URL}"v1/collectors \
@@ -91,6 +93,7 @@ terraform init -input=false -get=false || terraform init -input=false -upgrade
 # Sumo Logic fields
 if should_create_fields ; then
     readonly CREATE_FIELDS=1
+    # shellcheck disable=SC2312
     FIELDS_RESPONSE="$(curl -XGET -s \
         -u "${SUMOLOGIC_ACCESSID}:${SUMOLOGIC_ACCESSKEY}" \
         "${SUMOLOGIC_BASE_URL}"v1/fields | jq '.data[]' )"
@@ -98,7 +101,7 @@ if should_create_fields ; then
 
     declare -ra FIELDS=({{ include "helm-toolkit.utils.joinListWithSpaces" .Values.sumologic.logs.fields }})
     for FIELD in "${FIELDS[@]}" ; do
-        FIELD_ID=$( echo "${FIELDS_RESPONSE}" | jq -r "select(.fieldName == \"${FIELD}\") | .fieldId" )
+        FIELD_ID=$( echo "${FIELDS_RESPONSE}" | jq -r "select(.fieldName | ascii_downcase == \"${FIELD}\") | .fieldId" )
         # Don't try to import non existing fields
         if [[ -z "${FIELD_ID}" ]]; then
             continue
@@ -106,7 +109,7 @@ if should_create_fields ; then
 
         terraform import \
             -var="create_fields=1" \
-            sumologic_field."${FIELD}" "${FIELD_ID}"
+            sumologic_field."${FIELD}"[0] "${FIELD_ID}"
     done
 else
     readonly CREATE_FIELDS=0
@@ -128,6 +131,13 @@ true  # prevent to render empty if; then
 {{- if eq (include "terraform.sources.to_create" (dict "Context" $ctx "Type" $type "Name" $key)) "true" }}
 terraform import sumologic_http_source.{{ template "terraform.sources.name" (dict "Name" $key "Type" $type) }} "${COLLECTOR_NAME}/{{ $source.name }}"
 {{- end }}
+{{- end }}
+{{- else if and (eq $type "metrics") $ctx.sumologic.traces.enabled }}
+{{- /*
+If traces are enabled and metrics are disabled, create default metrics source anyway
+*/}}
+{{- if hasKey $sources "default" }}
+terraform import sumologic_http_source.{{ template "terraform.sources.name" (dict "Name" "default" "Type" $type) }} "${COLLECTOR_NAME}/{{ $sources.default.name }}"
 {{- end }}
 {{- end }}
 {{- end }}

@@ -1,1 +1,57 @@
-{{ tpl (toYaml .Values.metadata.metrics.config | replace ": '{{" ": {{" | replace "}}'" "}}") . | nindent 2 }}
+exporters:
+{{ tpl (.Files.Get "conf/metrics/otelcol/exporters.yaml") . | indent 2 }}
+
+extensions:
+{{ if .Values.metadata.persistence.enabled }}
+  ## Configuration for File Storage extension
+  ## ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.76.1/extension/storage/filestorage
+  file_storage:
+    compaction:
+      directory: /tmp
+      on_rebound: true
+    directory: /var/lib/storage/otc
+    timeout: 10s
+{{ end }}
+
+  ## ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.76.1/extension/healthcheckextension
+  health_check: {}
+
+  ## ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.76.1/extension/pprofextension
+  pprof: {}
+
+processors:
+{{ tpl (.Files.Get "conf/metrics/otelcol/processors.yaml") . | indent 2 }}
+
+receivers:
+  ## Configuration for Telegraf Receiver
+  ## ref: https://github.com/SumoLogic/sumologic-otel-collector/tree/main/pkg/receiver/telegrafreceiver
+  telegraf:
+    agent_config: |
+      [agent]
+        interval = "30s"
+        flush_interval = "30s"
+        omit_hostname = true
+      [[inputs.http_listener_v2]]
+        # wait longer than prometheus
+        read_timeout = "30s"
+        write_timeout = "30s"
+        service_address = ":9888"
+        data_format = "prometheusremotewrite"
+        path_tag = true
+        paths = [
+{{ include "metric.endpoints" . | indent 10 }}
+        ]
+
+service:
+  extensions:
+    - health_check
+{{ if .Values.metadata.persistence.enabled }}
+    - file_storage
+{{ end }}
+    - pprof
+  pipelines:
+    metrics:
+{{ tpl (.Files.Get "conf/metrics/otelcol/pipeline.yaml") . | indent 6 }}
+  telemetry:
+    logs:
+      level: {{ .Values.metadata.metrics.logLevel }}

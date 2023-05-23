@@ -97,6 +97,8 @@ spec:
       - name: config-volume
         configMap:
           name: {{ template "sumologic.metadata.name.logs.configmap" . }}
+      - name: tmp
+        emptyDir: {}
 {{- if .Values.metadata.logs.statefulset.extraVolumes }}
 {{ toYaml .Values.metadata.logs.statefulset.extraVolumes | indent 6 }}
 {{- end }}
@@ -107,13 +109,10 @@ spec:
       {{- end }}
       containers:
       - name: otelcol
-        image: {{ .Values.metadata.image.repository }}:{{ .Values.metadata.image.tag }}
+        image: {{ template "sumologic.metadata.image" . }}
         imagePullPolicy: {{ .Values.metadata.image.pullPolicy }}
         args:
           - --config=/etc/otel/config.yaml
-          {{- if eq .Values.otelcol.metrics.enabled false }}
-          - --metrics-level=none
-          {{- end }}
         resources:
           {{- toYaml .Values.metadata.logs.statefulset.resources | nindent 10 }}
         {{- if .Values.metadata.logs.statefulset.containers.otelcol.securityContext }}
@@ -121,25 +120,21 @@ spec:
           {{- toYaml .Values.metadata.logs.statefulset.containers.otelcol.securityContext | nindent 10 }}
         {{- end }}
         ports:
-        {{- if .Values.sumologic.traces.enabled }}
-        - name: zipkin-write
-          containerPort: 9411
-          protocol: TCP
-        {{- end }}
         - name: fluent-bit
           containerPort: 24321
           protocol: TCP
-        {{- if eq .Values.otelcol.metrics.enabled true }}
         - name: metrics
           containerPort: 8888
           protocol: TCP
-        {{- end }}
         - name: otlphttp
           containerPort: 4318
           protocol: TCP
         - name: pprof
           containerPort: 1777
           protocol: TCP
+        {{- if .Values.metadata.logs.statefulset.extraPorts }}
+          {{- toYaml .Values.metadata.logs.statefulset.extraPorts | nindent 8 }}
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /
@@ -159,6 +154,8 @@ spec:
         - name: config-volume
           mountPath: /etc/otel/config.yaml
           subPath: config.yaml
+        - name: tmp
+          mountPath: /tmp
 {{- if .Values.metadata.persistence.enabled }}
         - name: file-storage
           mountPath: /var/lib/storage/otc
@@ -169,7 +166,8 @@ spec:
 {{- if or .Values.sumologic.collector.sources .Values.metadata.logs.statefulset.extraEnvVars }}
         env:
 {{- $ctx := .Values -}}
-{{- include "kubernetes.sources.envs" (dict "Context" $ctx "Type" "logs") -}}
+{{- include "kubernetes.sources.envs" (dict "Context" $ctx "Type" "logs") | nindent 8 -}}
+{{- include "proxy-env-variables" . | nindent 8 -}}
 {{- if .Values.metadata.logs.statefulset.extraEnvVars }}
 {{- toYaml .Values.metadata.logs.statefulset.extraEnvVars | nindent 8 }}
 {{- end }}

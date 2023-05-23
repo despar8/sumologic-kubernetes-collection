@@ -6,7 +6,11 @@ if ! markdown-link-check --help >/dev/null 2>&1 ; then
 fi
 
 # Get all markdown files
-readonly FILES=$(find . -type f -name '*.md')
+ALL_FILES=$(find . -type f -name '*.md')
+readonly ALL_FILES
+
+# Use the files passed as command line arguments if provided, otherwise all of them
+readonly FILES=${*:-${ALL_FILES}}
 
 for file in ${FILES}; do
     markdown-link-check --progress --verbose --retry \

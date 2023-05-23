@@ -1,0 +1,5 @@
+sumologic:
+  events:
+    provider: fluentd
+fluentd:
+  apiServerUrl: null

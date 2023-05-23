@@ -8,7 +8,7 @@
 
 # Helm chart dependencies
 deploy/helm/sumologic/charts
-deploy/helm/sumologic/charts/*
+deploy/helm/sumologic/tmpcharts
 deploy/helm/sumologic/requirements.lock
 
 # Helm chart lock file
@@ -21,3 +21,7 @@ deploy/helm/sumologic/Chart.lock
 
 # ignore tmp directories
 tmp
+
+# Go workspace files
+go.work
+go.work.sum

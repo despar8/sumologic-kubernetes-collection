@@ -4,105 +4,193 @@ on:
   pull_request:
     branches:
       - main
-      - 'release-v[0-9]+'
-      - 'release-v[0-9]+.[0-9]+'
+      - "release-v[0-9]+"
+      - "release-v[0-9]+.[0-9]+"
 
 jobs:
-  markdownlint:
-    runs-on: ubuntu-20.04
+  docs-changed:
+    runs-on: ubuntu-22.04
+    outputs:
+      any_changed: ${{ steps.changed-files.outputs.any_changed }}
     steps:
       - uses: actions/checkout@v3
-      - name: install markdownlint
-        run: npm install -g markdownlint-cli
-      - name: markdownlint check
-        run: make markdownlint
+        with:
+          fetch-depth: 0
+      - name: Check if documentation related files changed
+        id: changed-files
+        uses: tj-actions/changed-files@v35
+        with:
+          files: |
+            **/*.md
+            images/*
+            ci/*
+            .github/*
+            **/Makefile
+            .*
+
+  chart-changed:
+    runs-on: ubuntu-22.04
+    outputs:
+      any_changed: ${{ steps.changed-files.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Check if Helm Chart related files changed
+        id: changed-files
+        uses: tj-actions/changed-files@v35
+        with:
+          files: |
+            deploy/helm/sumologic/**/*
+            **/*.yaml
+            **/*.yml
+            **/go.mod
+            **/go.sum
+            **/*.go
+            ci/*
+            .github/*
+            **/Makefile
+            .*
+            tests/integration/kind_images.json
+
+  markdownlint:
+    runs-on: ubuntu-22.04
+    needs: [docs-changed]
+    env:
+      PRETTIER_VERSION: 2.8.4
+    steps:
+      - uses: actions/checkout@v3
+      - name: install markdownlint and prettier
+        if: needs.docs-changed.outputs.any_changed == 'true'
+        run: npm install -g markdownlint-cli prettier@${PRETTIER_VERSION}
+      - name: markdown-lint check
+        if: needs.docs-changed.outputs.any_changed == 'true'
+        run: make markdown-lint
 
   shellcheck:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
-      YQ_VERSION: 3.4.1
+      YQ_VERSION: 4.33.2
+      SHELLCHECK_VERSION: 0.9.0
     steps:
       - uses: actions/checkout@v3
       - name: install shellcheck
         run: |
-            curl --retry 10 --retry-max-time 120 --retry-delay 5 -Lo- https://github.com/koalaman/shellcheck/releases/download/v0.7.1/shellcheck-v0.7.1.linux.x86_64.tar.xz | tar -xJf -
-            sudo cp shellcheck-v0.7.1/shellcheck /usr/local/bin && rm -rf shellcheck-v0.7.1
+          curl --retry 10 --retry-max-time 120 --retry-delay 5 -Lo- https://github.com/koalaman/shellcheck/releases/download/v${{ env.SHELLCHECK_VERSION }}/shellcheck-v${{ env.SHELLCHECK_VERSION }}.linux.x86_64.tar.xz | tar -xJf -
+          sudo cp shellcheck-v${{ env.SHELLCHECK_VERSION }}/shellcheck /usr/local/bin && rm -rf shellcheck-v${{ env.SHELLCHECK_VERSION }}
       - name: install yq
         run: |
-            curl --retry 10 --retry-max-time 120 --retry-delay 5 -L -o /tmp/yq https://github.com/mikefarah/yq/releases/download/${{ env.YQ_VERSION }}/yq_linux_amd64
-            chmod +x /tmp/yq
-            sudo mv /tmp/yq /usr/local/bin/yq
+          curl --retry 10 --retry-max-time 120 --retry-delay 5 -L -o /tmp/yq https://github.com/mikefarah/yq/releases/download/v${{ env.YQ_VERSION }}/yq_linux_amd64
+          chmod +x /tmp/yq
+          sudo mv /tmp/yq /usr/local/bin/yq
       - name: shellcheck
         run: make shellcheck
 
   yamllint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    needs: [chart-changed]
+    env:
+      PRETTIER_VERSION: 2.8.4
     steps:
       - uses: actions/checkout@v3
       - name: install yamllint
-        run: pip install yamllint
+        if: needs.chart-changed.outputs.any_changed == 'true'
+        run: npm install -g prettier@${PRETTIER_VERSION}
       - name: yamllint
-        run: make yamllint
+        if: needs.chart-changed.outputs.any_changed == 'true'
+        run: make yaml-lint
 
   helmlint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    needs: [chart-changed]
     steps:
       - uses: actions/checkout@v3
       - name: Lint helm chart
+        if: needs.chart-changed.outputs.any_changed == 'true'
         run: |
           make helm-dependency-update
           make helm-lint
 
   markdown-link-check:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    needs: [docs-changed]
     steps:
       - uses: actions/checkout@v3
       - uses: gaurav-nelson/github-action-markdown-link-check@v1
         with:
-          config-file: '.markdown_link_check.json'
+          config-file: ".markdown_link_check.json"
+          use-quiet-mode: yes
+          check-modified-files-only: yes
+          base-branch: ${{ github.base_ref }}
 
   md-links-lint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    needs: [docs-changed]
     steps:
       - uses: actions/checkout@v3
       - name: Lint markdown links
+        if: needs.docs-changed.outputs.any_changed == 'true'
         run: |
           make markdown-links-lint
 
-  markdown-table-formatter-check:
-    runs-on: ubuntu-20.04
+  check-configuration-keys:
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3.5.1
-      - name: Install markdown-table-formatter
-        run: npm install markdown-table-formatter --save
-      - name: Run markdown-table-formatter
-        run: CMD=./node_modules/.bin/markdown-table-formatter make markdown-table-formatter-check
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install pyyaml
+      - run: |
+          make check-configuration-keys
+
+  lint-template-tests:
+    name: Lint template tests
+    runs-on: ubuntu-latest
+    needs: [chart-changed]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        if: needs.chart-changed.outputs.any_changed == 'true'
+        with:
+          go-version: "1.20"
+          cache: false
+      - name: golangci-lint
+        if: needs.chart-changed.outputs.any_changed == 'true'
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.52.2
+          working-directory: ./tests/helm/
+          # Optional: golangci-lint command line arguments.
+          args: --timeout=10m --verbose
 
   test:
-    runs-on: ubuntu-20.04
-    env:
-      YQ_VERSION: 3.4.1
+    runs-on: ubuntu-22.04
     needs:
-      - shellcheck
-      - yamllint
       - helmlint
+      - chart-changed
     steps:
       - uses: actions/checkout@v3
-      - name: yq
-        run: |
-            curl --retry 10 --retry-max-time 120 --retry-delay 5 -L -o /tmp/yq https://github.com/mikefarah/yq/releases/download/${{ env.YQ_VERSION }}/yq_linux_amd64
-            chmod +x /tmp/yq
-            sudo mv /tmp/yq /usr/local/bin/yq
+      - name: Setup go
+        if: needs.chart-changed.outputs.any_changed == 'true'
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.20"
+          cache-dependency-path: "**/go.sum"
       - name: test
-        run: make test
+        if: needs.chart-changed.outputs.any_changed == 'true'
+        run: make test-templates
 
   ##############################################################################
   # Integration tests
   ##############################################################################
 
   setup-integration-tests:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    needs: [chart-changed]
+    if: needs.chart-changed.outputs.any_changed == 'true'
     outputs:
       kind_images: ${{ steps.set_kind_images.outputs.kind_images }}
       test_names: ${{ steps.set_test_names.outputs.test_names }}
@@ -112,7 +200,7 @@ jobs:
         name: Set kind images
         working-directory: ./tests/integration/
         run: |
-          echo "::set-output name=kind_images::$(jq -cM '.supported' kind_images.json)"
+          echo "kind_images=$(jq -cM '.supported' kind_images.json)" >> $GITHUB_OUTPUT
       - name: Print kind images
         run: echo "Kind images ${{ steps.set_kind_images.outputs.kind_images }}"
       - id: set_test_names
@@ -120,68 +208,72 @@ jobs:
         working-directory: ./tests/integration/
         # grep magic described in https://unix.stackexchange.com/a/13472
         run: |
-          echo "::set-output name=test_names::$(grep -shoP "(?<=^func )(Test[a-zA-z_0-9]+)(?=\(t \*testing.T\) {)" * | jq -R . | jq -cs .)"
+          echo "test_names=$(grep -shoP "(?<=^func )(Test[a-zA-z_0-9]+)(?=\(t \*testing.T\) {)" * | jq -R . | jq -cs .)" >> $GITHUB_OUTPUT
       - name: Print test names
         run: echo "Test names ${{ steps.set_test_names.outputs.test_names }}"
 
   lint-integration-tests:
     name: Lint integration tests
     runs-on: ubuntu-latest
+    needs: [chart-changed]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
+        if: needs.chart-changed.outputs.any_changed == 'true'
         with:
-          go-version: '1.18'
+          go-version: "1.20"
+          cache: false
       - name: golangci-lint
+        if: needs.chart-changed.outputs.any_changed == 'true'
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.49
+          version: v1.52.2
           working-directory: ./tests/integration/
           # Optional: golangci-lint command line arguments.
           args: --timeout=10m --verbose
 
   integration-tests:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     name: IT - ${{ matrix.test_name }} - ${{ matrix.kind_image }}
     needs:
       - setup-integration-tests
+      - chart-changed
+    if: needs.chart-changed.outputs.any_changed == 'true'
     strategy:
       matrix:
         kind_image: ${{ fromJSON(needs.setup-integration-tests.outputs.kind_images) }}
         test_name: ${{ fromJSON(needs.setup-integration-tests.outputs.test_names) }}
+    env:
+      KIND_VERSION: 0.17.0
     steps:
       - uses: actions/checkout@v3
       - name: Setup go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
-          go-version: '1.18'
-      - uses: engineerd/setup-kind@v0.5.0
-        with:
-          version: v0.14.0
-          # Cluster will be created by the tests themselves so no need to create it here.
-          skipClusterCreation: "true"
-      # As described in
-      # https://github.com/mvdan/github-actions-golang#how-do-i-set-up-caching-between-builds
-      - uses: actions/cache@v3
-        with:
-          path: |
-            /home/runner/go/pkg/mod
-            /home/runner/.cache/go-build
-          key: ${{ runner.os }}-go-integration-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-integration-
+          go-version: "1.20"
+          cache-dependency-path: "**/go.sum"
+      - name: Setup kind
+        run: |
+          curl --retry 10 --retry-max-time 120 --retry-delay 5 -Lo ./kind https://kind.sigs.k8s.io/dl/v${{env.KIND_VERSION}}/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
       - name: Run integration test - ${{ matrix.test_name }}
         working-directory: ./tests/integration/
-        run: make test TEST_NAME=${{matrix.test_name}} KIND_NODE_IMAGE=${{matrix.kind_image}}
-  
+        run: make test TEST_NAME=^${{matrix.test_name}}$ KIND_NODE_IMAGE=${{matrix.kind_image}}
+
   integration-test-status:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+    if: ${{ always() }}
     needs:
       - integration-tests
+      - chart-changed
     steps:
+      - name: Skipped
+        if: needs.chart-changed.outputs.any_changed == 'false'
+        run: exit 0
       - name: Tests passed
-        if: ${{ !(contains(needs.*.result, 'failure')) }}
+        if: ${{ (needs.chart-changed.outputs.any_changed == 'true') && !(contains(needs.*.result, 'failure')) }}
         run: exit 0
       - name: Tests failed
-        if: ${{ contains(needs.*.result, 'failure') }}
+        if: ${{ (needs.chart-changed.outputs.any_changed == 'true') && contains(needs.*.result, 'failure') }}
         run: exit 1

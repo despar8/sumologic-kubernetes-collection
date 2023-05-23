@@ -1,6 +1,7 @@
 ## Fluent Bit configuration described in:
-## https://github.com/SumoLogic/sumologic-kubernetes-collection/blob/main/deploy/docs/ContainerLogs.md#using-old-multiline-parser
+## https://github.com/SumoLogic/sumologic-kubernetes-collection/blob/main/docs/container-logs.md#using-old-multiline-parser
 fluent-bit:
+  enabled: true
   luaScripts:
     parse_logs.lua: |
       local function split(s, delimiter)
@@ -68,7 +69,7 @@ fluent-bit:
           HTTP_Listen  0.0.0.0
           HTTP_Port    2020
     ## https://docs.fluentbit.io/manual/pipeline/inputs
-    ## ref: https://github.com/SumoLogic/sumologic-kubernetes-collection/blob/main/deploy/docs/ContainerLogs.md
+    ## ref: https://github.com/SumoLogic/sumologic-kubernetes-collection/blob/main/docs/container-logs.md
     inputs: |
       [INPUT]
           Name                tail
@@ -84,12 +85,12 @@ fluent-bit:
           DB                  /tail-db/tail-containers-state-sumo.db
           DB.Sync             Normal
     customParsers: |
-     [PARSER]
-         Name         containerd_multiline_pattern
-         Format       regex
-         Regex        (?<time>^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[.]\d+Z) (?<stream>stdout|stderr) (?<logtag>[P|F]) (?<log>\w+ \d+ \d{2}:\d{2}:\d{2} .*)
-         Time_Key     time
-         Time_Format  %Y-%m-%dT%H:%M:%S.%LZ
+      [PARSER]
+          Name         containerd_multiline_pattern
+          Format       regex
+          Regex        (?<time>^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[.]\d+Z) (?<stream>stdout|stderr) (?<logtag>[P|F]) (?<log>\w+ \d+ \d{2}:\d{2}:\d{2} .*)
+          Time_Key     time
+          Time_Format  %Y-%m-%dT%H:%M:%S.%LZ
     filters: |
       [FILTER]
           Name    lua
@@ -119,3 +120,15 @@ fluentd:
     containers:
       multiline:
         enabled: false
+
+sumologic:
+  logs:
+    collector:
+      otelcol:
+        enabled: false
+  metrics:
+    enabled: false
+  traces:
+    enabled: false
+  events:
+    enabled: false
